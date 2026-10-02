@@ -6,6 +6,8 @@ board, send binary files, and control two joysticks over one BLE connection.
 
 [Česky / Czech](README.cs.md) · [Wire protocol](PROTOCOL.md) · [Verification](TESTING.md) · [MIT license](LICENSE)
 
+**[Open the live demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)** — hosted on GitHub Pages over HTTPS; no local server required.
+
 ## What is included
 
 - **Interactive BLE REPL:** type directly in the terminal; cursor editing, history,
@@ -56,7 +58,12 @@ ESP32/ESP32-S3 use Xtensa. Do not interchange compiled files.
 
 ## 2. Open the browser demo
 
-From this repository directory:
+Open the **[live demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)**
+and click **Connect board**. The driver must already be running on your ESP32.
+The browser communicates directly with the board over BLE; GitHub only hosts the
+static HTML, JavaScript and CSS.
+
+For local development, run this from the repository directory:
 
 ```sh
 python -B serve.py
@@ -68,8 +75,10 @@ Web Bluetooth requires a secure context and a user gesture to open the device
 picker. Localhost is suitable for development; publish using HTTPS. Opening
 `index.html` directly as `file://` is not the supported launch procedure.
 
-On GitHub Pages, publish the repository root and open its **`/web/`** URL. All
-assets are relative. The Python server is only for local development, binds to
+GitHub Pages publishes **`main` / repository root**. The root page redirects to
+**`/web/`**; all application assets are relative. `.nojekyll` keeps the published
+files unchanged. Pushing updates to `main` automatically updates the site.
+The Python server is only for local development, binds to
 loopback, and serves with cache disabled; it is not a production hosting service.
 
 See [Chrome's Web Bluetooth guide](https://developer.chrome.com/docs/capabilities/bluetooth)

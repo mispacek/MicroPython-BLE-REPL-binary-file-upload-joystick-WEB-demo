@@ -6,6 +6,8 @@ spouštění a zastavení kódu, binární upload souborů a dva joysticky.
 
 [English README](README.md) · [Popis protokolu](PROTOCOL.md) · [Ověření](TESTING.md)
 
+**[Otevřít online demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)** — běží na GitHub Pages přes HTTPS, místní server není potřeba.
+
 ## Rychlé spuštění
 
 1. Přes USB nahraj `firmware/ble_repl.py` do desky jako `/ble_repl.py`.
@@ -17,9 +19,13 @@ spouštění a zastavení kódu, binární upload souborů a dva joysticky.
    ble = start_ble_repl(name="MPY-BLE-DEMO")
    ```
 
-3. Z adresáře tohoto repozitáře spusť `python -B serve.py`.
-4. Otevři **http://localhost:8087/web/** v prohlížeči s Web Bluetooth,
-   klikni **Connect board** a vyber desku.
+3. Otevři **[online demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)**
+   v prohlížeči s Web Bluetooth.
+4. Klikni **Connect board** a vyber desku.
+
+Pro místní vývoj spusť z adresáře repozitáře `python -B serve.py` a otevři
+**http://localhost:8087/web/**. V online demu komunikuje prohlížeč přímo s deskou
+přes BLE; GitHub poskytuje pouze statické HTML, JavaScript a CSS.
 
 BLE jméno má 1–29 UTF-8 bajtů. Driver vyžaduje BLE/NimBLE, `micropython.RingIO`,
 native emitter a měkký `machine.Timer`. Fyzicky ověřená deska je ESP32-C3 s
@@ -29,7 +35,9 @@ Projekt startup sám neupravuje. Druhý BLE vlastník nebo obsazený dupterm slo
 se odmítne; původní vlastník musí být nejprve uzavřený.
 
 Web potřebuje HTTPS nebo localhost; otevření přes `file://` není doporučený postup.
-Pro GitHub Pages publikuj kořen repozitáře a používej URL končící `/web/`.
+GitHub Pages publikuje větev **`main` / kořen repozitáře**. Úvodní stránka přesměruje
+na `/web/`, `.nojekyll` zachovává soubory beze změny. Další push do `main` web
+automaticky aktualizuje.
 Stránka nevyužívá CDN, externí fonty ani npm knihovny.
 
 ## REPL a editor
