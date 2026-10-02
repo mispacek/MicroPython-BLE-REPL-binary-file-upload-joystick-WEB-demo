@@ -12,13 +12,19 @@ board, send binary files, and control two joysticks over one BLE connection.
 
 ## What is included
 
+Version **1.2.0** includes the ESP32-S3-tested driver fixes: direct `run_code()`
+after upload, repeated final DATA acknowledgement without writing twice, and
+file/ingress diagnostics with recovery on the existing BLE connection. The web
+client protects uploads from Stop/Ctrl+C and preserves the original error if REPL
+cleanup also fails. See [Verification](TESTING.md) for the exact test scope.
+
 - **Interactive BLE REPL:** type directly in the terminal; cursor editing, history,
   Tab completion, paste/raw modes and Ctrl+C over Nordic UART Service.
 - **Python editor:** syntax colors, four-space Tab indentation, local `.py` load/save, Run/Stop.
 - **Binary upload:** `.py`, `.mpy`, images and arbitrary bytes; missing parent folders are created.
 - **Dual joystick:** signed Lx/Ly/Rx/Ry, legacy `Joystick` API, mouse/touch/arrow-key controls.
 - **Protocol client:** one GATT write lane, MTU-aware chunks, ACK windows, bounded retries,
-  STATUS recovery after lost ACKs and cancellation before returning to the REPL.
+  STATUS recovery after lost ACKs and error cleanup before returning to the REPL.
 - **Firmware diagnostics:** actual negotiated MTU, queue/drop counters, file state and GC memory.
 
 The web page uses local, pinned MIT copies of xterm.js 6.0.0 and FitAddon 0.11.0.
@@ -105,7 +111,7 @@ xterm.js renders cursor movements and ANSI sequences even across BLE notificatio
 | ↑ / ↓ | Previous / next command from MicroPython history |
 | ← / →, Home / End, Backspace / Delete | Edit the current line on the board |
 | Tab | Complete names using MicroPython |
-| Ctrl+C / Interrupt | Interrupt Python or cancel the managed Run/upload |
+| Ctrl+C / Interrupt | Interrupt Python execution; ignored during file upload |
 | Ctrl+A / Raw, Ctrl+B / REPL | Enter raw mode / return to friendly mode |
 | Ctrl+E / Paste, Ctrl+D / End | Begin paste mode / execute pasted or raw source |
 | Ctrl/⌘+V | Paste clipboard text into the active mode |
@@ -129,18 +135,23 @@ source exceed the 2048-byte REPL input ring; compilation still needs sufficient
 board RAM. Stdout streams to the terminal; raw-REPL stderr is shown as well.
 On completion the client returns to friendly REPL. **Ctrl/⌘+Enter** also runs.
 
-**Stop** cancels the client operation. During upload it first sends protocol
-CANCEL to close the partial target, then sends Ctrl+C and a friendly-REPL escape.
-During execution it interrupts Python, leaving the BLE driver running. A script
+**Stop** interrupts Python execution, leaving the BLE driver running. Stop and
+terminal Ctrl+C cannot cancel an upload, including the upload preceding editor Run:
+they remain blocked through final ACK and REPL synchronization. A script
 can catch `KeyboardInterrupt`; native blocking code or disabled interrupt handling
 may delay/prevent stopping. Disconnect is available independently.
 
 **Upload file** reads `File.arrayBuffer()` and preserves every byte. Select a
 destination such as `/lib/helper.py` or `/assets/image.bin`. Accepted headers open
 the target in `wb`: **existing files are overwritten**, with no temporary copy or
-rollback. Cancellation, disconnection or an error may leave a partial file.
+rollback. Disconnection, power loss or an actual error may leave a partial file.
 The final file ACK follows close/sync; SUM8 detects frame errors and is not a
 cryptographic checksum of the file. The hardware test additionally verifies SHA-256.
+
+On a file error the client reports the driver's `BLE Error reason=... errno=...`,
+sends CANCEL to recover the parser, and keeps the connection for the next upload.
+A cleanup timeout does not replace that original error. A transport failure can
+still require an explicit reconnect; the client does not silently disconnect.
 
 The highlighter is a small lexer for comments, strings, keywords, numbers and
 builtins. It is display-only; it does not validate Python or fully parse f-string
@@ -216,7 +227,10 @@ historical fault after reconnect; use `connected`/`ready` to interpret current s
 The transport uses fixed 2048-byte RX/TX rings, 4096-byte ingress, a soft 20 ms
 timer, deferred file I/O, priority protocol replies and native Ctrl+C delivery via
 dupterm notification. Full stdout queues drop new output and count it; the driver
-disconnects on input overflow rather than executing a truncated command.
+enters fault phase 5 on input overflow rather than executing a truncated command.
+It keeps BLE connected, reports the cause and ignores ordinary text until a valid
+new upload header or CANCEL recovers the parser. `fault` and `last_file_error`
+retain history; current transfer recovery is indicated by phase 0 and `file_error=0`.
 
 Aliases `IDEBLERepl` and `start_ble_repl_bletime` are preserved. Successful start
 also registers `ble_repl_bletime` as an alias for old joystick imports. It does
@@ -279,7 +293,9 @@ ble.disconnect();
 
 Operations reject if busy; the caller must catch promises and update controls.
 `run()` resolves when user code finishes; it intentionally has no execution timeout.
-Stop rejects an active run/upload with `AbortError`. Events are `state`, `device`,
+Stop rejects a running program with `AbortError`; during upload it returns `false`
+and lets the transfer finish. Use `uploadActive` to disable interrupt controls.
+Events are `state`, `device`,
 `config`, `text`, `stderr`, `terminalReady` and `notice`; `on()` returns an unsubscribe function.
 `writeTerminal()` accepts UTF-8 text/control sequences with a bounded 4096-byte
 queue, sends paced MTU-sized chunks and preserves key order. Pending input is

@@ -119,11 +119,14 @@ try {
     const r = await client.run('print("AFTER-STOP")', root + '/run.py');
     assert.match(r.stdout, /AFTER-STOP/); return { stopAndNextRunMs:Date.now() - begin };
   });
-  await group('Stop upload / partial file / successful replacement', async () => {
-    const job = client.upload(root + '/partial.bin', new Uint8Array(32768));
-    const rejected = assert.rejects(job, { name:'AbortError' });
+  await group('Stop during upload ignored / complete file hash / next upload', async () => {
+    const job = client.upload(root + '/partial.bin', new Uint8Array(4097));
     await new Promise(resolve => setTimeout(resolve, 180));
-    await client.stop(); await rejected;
+    assert.equal(await client.stop(), false); await job;
+    assert.equal(await request('size', { path:root + '/partial.bin' }), 4097);
+    const {createHash} = await import('node:crypto');
+    assert.equal(await request('digest', {path:root + '/partial.bin'}),
+      createHash('sha256').update(new Uint8Array(4097)).digest('hex'));
     await client.upload(root + '/partial.bin', Uint8Array.of(10,20,30));
     assert.equal(await request('size', { path:root + '/partial.bin' }), 3);
   });

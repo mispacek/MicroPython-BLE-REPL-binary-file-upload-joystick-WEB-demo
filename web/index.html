@@ -7,7 +7,7 @@
   <title>BLE REPL · MicroPython playground</title>
   <link rel="stylesheet" href="vendor/xterm/css/xterm.css">
   <link rel="stylesheet" href="style.css">
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=1.2.0"></script>
 </head>
 <body>
   <div class="site-header">
@@ -65,7 +65,7 @@
         <div class="panel-head"><div><span class="eyebrow">Files</span><h2>Binary file upload</h2></div><span class="tag">.py · .mpy · any bytes</span></div>
         <label class="file-label" for="upload-file">Choose a file<input id="upload-file" type="file"></label>
         <label for="upload-path">Destination on board</label><input id="upload-path" value="/data.bin" spellcheck="false">
-        <p class="hint">Creates missing folders. Overwrites the destination. Stop may leave a partial file.</p>
+        <p class="hint">Creates missing folders. Overwrites the destination. Stop and Ctrl+C are paused until the transfer finishes.</p>
         <div class="actions"><button id="upload" disabled>Upload file</button><span id="progress-label" role="status">Ready</span></div>
         <progress id="progress" value="0" max="100" aria-label="File upload progress"></progress>
       </article>

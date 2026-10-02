@@ -1,0 +1,44 @@
+{
+  "recorded_date": "2026-10-02",
+  "passed": true,
+  "scope": "Driver-only provenance: exact firmware bytes tested with production ESP IDE, not with the updated demo JavaScript client.",
+  "source_sha256": "3eae775e631cb62ed6777b2b657e1f27cb274ccd99a88d65390a386e9011db82",
+  "board": {
+    "type": "ESP32-S3",
+    "micropython": "1.29.0 (2026-08-24)",
+    "buffers": {
+      "RX": 2048,
+      "TX": 2048,
+      "IN": 4096
+    }
+  },
+  "tested_client": "ESP IDE Web Bluetooth v2.1.13/v2.1.14",
+  "tests": {
+    "binary_sizes": [
+      0,
+      1,
+      239,
+      240,
+      241,
+      961,
+      8192,
+      32768,
+      65536,
+      262144
+    ],
+    "all_binary_sizes_and_sha256_match": true,
+    "stop_attempts_during_256k_upload": 10,
+    "lost_final_ack_recovered_without_reconnect": true,
+    "filesystem_error": "BLE Error reason=file errno=20",
+    "same_connection_upload_after_error": true,
+    "directory_files": 40,
+    "complete_directory_listings": 3,
+    "download_bytes": 65536,
+    "download_sha256_matches": true
+  },
+  "limits": [
+    "Updated demo browser/client has local tests only in this revision.",
+    "Original startup/program files were preserved; only owned fixtures were removed.",
+    "No Android/iOS or general RF endurance claim."
+  ]
+}

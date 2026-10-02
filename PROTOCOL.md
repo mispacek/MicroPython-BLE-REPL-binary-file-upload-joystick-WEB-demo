@@ -37,8 +37,8 @@ can split an escape sequence just as they can split a UTF-8 codepoint.
 The demo's `resumeRepl()` synchronizes once on connection/recovery;
 `writeTerminal()` preserves the active friendly/raw/paste mode. During managed
 Run it also supplies stdin for `input()` after raw REPL acknowledges execution.
-Uploads and REPL setup block text input. In managed operations Ctrl+C delegates
-to Stop, including CANCEL before leaving upload mode; manual REPL forwards `03`.
+Uploads and REPL setup block text input. During managed execution Ctrl+C delegates
+to Stop; during upload both are ignored until completion. Manual REPL forwards `03`.
 
 | Byte | Standard MicroPython meaning |
 | --- | --- |
@@ -61,7 +61,10 @@ run wait without closing the transport. There is no execution time limit.
 After upload EOF, the driver still recognizes STATUS/retry packets. Return to
 REPL with the complete sequence `03 0D 02` (Ctrl+C, CR, Ctrl+B), not a lone control
 byte: a single byte can wait up to 1 s while the legacy parser distinguishes DATA.
-During active upload, send CANCEL first; otherwise a control character can become DATA.
+The driver also accepts directly following ASCII commands such as `run_code()\r\n`;
+the last DATA sequence still takes precedence if its bytes resemble a command.
+During active upload, never inject REPL control bytes. The demo protects Stop/Ctrl+C
+until the upload and its final synchronization finish.
 
 ## Upload header
 
@@ -137,9 +140,10 @@ FA CE B0 0C | OPCODE | 00 00 00
 | `FF` | CONFIG | ASCII capability line |
 | `FD` | STATUS | ACK/NAK + **next expected sequence**, including after EOF |
 | `FE` | CANCEL | Close partial file, `15 FF FF`, return parser to REPL |
-| `FC` | STOP extension | Close partial file, native user-code interruption, `06 FC FF` |
+| `FC` | STOP extension | Interrupt user code and reply `06 FC FF`; ignored during pending upload/final ACK or fault phase 5 |
 
-This demo uses CANCEL + ordinary Ctrl+C for Stop. If an ACK is lost, query STATUS;
+The demo uses ordinary Ctrl+C for Stop outside upload. CANCEL is reserved for
+error recovery, not the Stop button. If an ACK is lost, query STATUS;
 do not reopen the file. On STATUS ACK sequence `n`, resume at `n * dataSize`, keeping
 dataSize unchanged throughout the transfer. STATUS ACK equal to the packet count
 confirms EOF. STATUS NAK indicates a file error; abort rather than claiming success.
@@ -151,7 +155,16 @@ Fewer than 65,536 DATA packets are allowed, preventing sequence wrap. At chunk 2
 the largest demo file is therefore 65,535 × 16 bytes, smaller than the LE24 bound.
 An increased MTU mid-transfer may allow larger GATT writes; keep the DATA size fixed.
 
-SUM8 is a frame checksum, not an end-to-end hash. On cancellation/disconnect/error,
+Repeated final DATA with a valid checksum receives its ACK again without reopening,
+writing or syncing the file a second time. This resolves a lost final acknowledgement.
+
+On a driver fault, `BLE Error reason=<name> errno=<number>\n` reports the cause;
+the line may follow a REPL prompt and span notifications. Treat it separately from
+three-byte ACK/NAK replies. File/ingress faults enter phase 5 and keep BLE connected.
+Ordinary text is quarantined until a valid new file header or CANCEL resets the parser.
+The demo preserves the original error even if subsequent REPL cleanup fails.
+
+SUM8 is a frame checksum, not an end-to-end hash. On explicit CANCEL/disconnect/error,
 the driver closes the file but does not restore its old content or remove partial
 data. An application's atomic update policy belongs above this direct-write protocol.
 
@@ -174,6 +187,7 @@ file upload. This service has no button bitmask.
 
 Serialize GATT operations across both services; browser stacks can reject parallel
 writes. Cancel between whole protocol frames, reset session state on disconnect,
-and catch asynchronous failures. RX overflow disconnects to prevent truncated
-Python execution. Stdout may be dropped under heavy output pressure; diagnostics
+and catch asynchronous failures. RX overflow quarantines text and reports a fault
+without automatically disconnecting, preventing truncated Python execution.
+Stdout may be dropped under heavy output pressure; diagnostics
 track it. NUS itself does not provide authentication or encryption policy.

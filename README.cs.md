@@ -6,6 +6,12 @@ spouštění a zastavení kódu, binární upload souborů a dva joysticky.
 
 [English README](README.md) · [Popis protokolu](PROTOCOL.md) · [Ověření](TESTING.md)
 
+Verze **1.2.0** obsahuje opravy driveru ověřené na ESP32-S3: přímé `run_code()`
+po uploadu, opakované potvrzení posledního DATA paketu bez dvojího zápisu a
+diagnostiku chyb s obnovou na stejném BLE spojení. Klient chrání upload před
+Stop/Ctrl+C a zachovává původní chybu i při selhání následného návratu do REPLu.
+Přesný rozsah testů je v [Ověření](TESTING.md).
+
 **[Otevřít online demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)** — běží na GitHub Pages přes HTTPS, místní server není potřeba.
 
 ## Rychlé spuštění
@@ -59,7 +65,7 @@ když jsou rozdělené mezi BLE notifikace. Prohlížeč napsané znaky sám nep
 | ↑ / ↓ | Historie příkazů na desce |
 | ← / →, Home / End, Backspace / Delete | Úprava rozepsaného příkazu |
 | Tab | Doplnění názvu přes MicroPython |
-| Ctrl+C / Interrupt | Přerušení Pythonu nebo zrušení běžícího Run/uploadu |
+| Ctrl+C / Interrupt | Přerušení běžícího Pythonu; během uploadu se ignoruje |
 | Ctrl+A / Raw, Ctrl+B / REPL | Raw režim / návrat do friendly REPLu |
 | Ctrl+E / Paste, Ctrl+D / End | Začátek paste režimu / spuštění vloženého kódu |
 | Ctrl/⌘+V | Vložení textu ze schránky |
@@ -86,8 +92,9 @@ REPL bufferu; na jeho kompilaci ovšem stále musí stačit RAM desky.
 Klávesová zkratka **Ctrl/⌘+Enter** také spouští. Výstup i Python výjimky jsou
 v terminálu. Po dokončení se klient vrátí do friendly REPLu.
 
-**Stop** přeruší Python přes Ctrl+C a ponechá BLE připojené. Během uploadu nejprve
-odešle CANCEL a uzavře rozpracovaný soubor. Program může `KeyboardInterrupt` zachytit;
+**Stop** přeruší Python přes Ctrl+C a ponechá BLE připojené. Během uploadu jsou
+Stop a terminálové Ctrl+C blokované až do posledního ACK a návratu do REPLu.
+Platí to i pro upload před spuštěním kódu z editoru. Program může `KeyboardInterrupt` zachytit;
 blokující nativní operace nebo vypnuté přerušování mohou zastavení zpozdit či znemožnit.
 Ctrl+D ve friendly REPLu je soft reset, nikoli bezpečný ekvivalent Stop.
 
@@ -108,11 +115,16 @@ Vyber soubor a zadej cílovou cestu, například `/lib/helper.py` nebo `/assets/
 **Upload file** přenáší skutečné bajty, takže fungují i `.mpy` a jiné binární soubory.
 Neexistující složky vytvoří driver.
 
-**Cíl se zapisuje přímo a existující soubor se přepíše.** Stop, chyba nebo odpojení
+**Cíl se zapisuje přímo a existující soubor se přepíše.** Chyba, výpadek napájení nebo odpojení
 mohou zanechat neúplný soubor; stará verze se automaticky neobnoví. Poslední ACK přijde
 až po close/sync. Klient při ztraceném ACK zjišťuje STATUS a pokračuje od potvrzeného
 pořadového čísla, místo aby soubor znovu otevřel a zkrátil. SUM8 kontroluje pakety;
 fyzický test navíc ověřuje SHA-256 přes nezávislé USB čtení.
+
+Při chybě souboru klient ukáže `BLE Error reason=... errno=...`, protokolovým
+CANCEL obnoví parser a ponechá spojení pro další upload. Chyba při návratu do
+REPLu nepřepíše původní příčinu. Skutečný výpadek GATT může vyžadovat ruční
+opětovné připojení; klient se při chybě sám potichu neodpojuje.
 
 Limit je méně než 65 536 DATA paketů a nejvýše 16 777 215 B; při MTU 23 je skutečný
 limit přísnější. Název má nejvýše **48 UTF-8 bajtů**, nikoli 48 znaků.
@@ -182,8 +194,11 @@ Driver nepřepisuje `utime` a nevkládá globální funkce aplikace, například
 
 Mechanika používá pevné RX/TX 2048 B, ingress 4096 B, měkký 20ms timer, odložené
 file I/O a prioritní odpovědi protokolu. Při přetížení stdout se nové výstupy
-zahazují a počítají; při přetečení vstupu se spojení odpojí, aby se nespustil
-zkrácený Python příkaz.
+zahazují a počítají. Při přetečení vstupu driver přejde do chybové fáze 5,
+ohlásí příčinu a ponechá BLE připojené. Běžný text ignoruje, aby se nespustil
+zkrácený Python příkaz; parser obnoví platná hlavička nového uploadu nebo CANCEL.
+`fault` a `last_file_error` uchovávají historii; aktuální zotavení poznáš podle
+fáze 0 a `file_error=0`.
 
 ## Vlastní JavaScript projekt
 
@@ -216,8 +231,9 @@ await ble.stop();
 ```
 
 Kompletní HTML integrační příklad je v [anglickém README](README.md#6-integrate-the-javascript-client).
-`run()` čeká na dokončení programu bez časového limitu. Stop odmítne aktivní upload/run
-s `AbortError`; ostatní chyby zobraz. Události jsou `state`, `device`, `config`,
+`run()` čeká na dokončení programu bez časového limitu. Stop odmítne běžící program
+s `AbortError`, ale během uploadu vrátí `false` bez jeho přerušení. Ostatní chyby zobraz.
+Události jsou `state`, `device`, `config`,
 `text`, `stderr`, `terminalReady`, `notice`. `on()` vrací funkci pro odhlášení.
 Interaktivní terminál zapoj přes `createReplTerminal()` z `web/terminal.js`,
 jeho vstup směruj do `ble.writeTerminal()` a výstup do `terminal.write()`.

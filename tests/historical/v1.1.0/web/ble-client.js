@@ -48,8 +48,6 @@ export class BleReplClient {
     this._received = '';
     this._operation = null;
     this._uploading = false;
-    this._transferError = null;
-    this._diagnostic = '';
     this._stopping = null;
     this._raw = null;
     this._epoch = 0;
@@ -96,7 +94,6 @@ export class BleReplClient {
     this.rx = rx; this.tx = tx; this.joy = joy;
     this._pending = new Uint8Array(); this._decoder = new TextDecoder();
     this._replies = []; this._received = ''; this.chunk = 20; this.mtu = 23;
-    this._transferError = null; this._diagnostic = '';
     // Register BEFORE enabling notifications so an early capability line cannot be missed.
     tx.addEventListener('characteristicvaluechanged', this._notify);
     this.connected = true;
@@ -119,7 +116,6 @@ export class BleReplClient {
     this.device?.removeEventListener('gattserverdisconnected', this._disconnected);
     this.connected = false; this.rx = this.tx = this.joy = null;
     this._raw = null; this._uploading = false;
-    this._transferError = null; this._diagnostic = '';
     this._emit('wake'); this._state('disconnected');
   }
 
@@ -165,13 +161,6 @@ export class BleReplClient {
     this._pending = all.slice(i);
   }
   _text(text) {
-    if (this._uploading) {
-      // Driver diagnostics may follow a prompt and span many notifications.
-      // Wait for the newline: a fragmented errno=20 must not become errno=2.
-      this._diagnostic = (this._diagnostic + text).slice(-256);
-      const match = this._diagnostic.match(/BLE Error reason=[a-z_]+ errno=\d+\r?\n/);
-      if (match) this._transferError = new Error(match[0].trim());
-    }
     this._received = (this._received + text).slice(-65536);
     if (!this._raw) this._emit('text', text);
     else this._rawText(text);
@@ -221,10 +210,7 @@ export class BleReplClient {
     });
   }
   _reply(timeout, signal) {
-    return this._wait(() => {
-      if (this._transferError) throw this._transferError;
-      return this._replies.length ? this._replies.shift() : undefined;
-    }, timeout, signal);
+    return this._wait(() => this._replies.length ? this._replies.shift() : undefined, timeout, signal);
   }
   _prompt(prompt, timeout, signal) {
     return this._wait(() => this._received.includes(prompt) ? true : undefined, timeout, signal);
@@ -278,18 +264,12 @@ export class BleReplClient {
     return this.connected && !this._stopping && (!this._operation ||
       (this._operation.kind === 'running' && this._raw?.phase === 1));
   }
-  get uploadActive() {
-    // Keep protection through final ACK and the return to friendly REPL.
-    // Editor Run uses the same upload path before executing user code.
-    return this._uploading || this.state === 'uploading';
-  }
   _discardTerminalInput() {
     this._terminalInput?.controller.abort();
     this._terminalInput = null;
   }
   writeTerminal(text) {
-    // Managed Run: use Stop. Upload: ignore interrupts until transfer finishes.
-    // Manual REPL: send the actual
+    // Managed Run/upload: use Stop cancellation. Manual REPL: send the actual
     // Ctrl+C byte so MicroPython keeps its current friendly/raw/paste mode.
     if (text === '\x03' && this._operation) return this.stop();
     if (!this.terminalReady) return Promise.reject(new Error('Terminal input is unavailable during upload or REPL setup.'));
@@ -347,9 +327,7 @@ export class BleReplClient {
     const count = Math.ceil(bytes.length / dataSize);
     if (count >= 65536) throw new Error('File needs too many DATA packets for this MTU.');
     this._uploading = true; this._replies = [];
-    this._transferError = null; this._diagnostic = '';
     let finished = false;
-    let failure = null;
     try {
       let accepted = false;
       for (let attempt = 0; attempt < 3 && !accepted; attempt++) {
@@ -405,23 +383,13 @@ export class BleReplClient {
         progress({ sent: Math.min(bytes.length, next * dataSize), total: bytes.length });
       }
       finished = true; // Empty file completes with the accepted header ACK.
-    } catch (error) {
-      failure = error;
-      throw error;
     } finally {
-      // CANCEL is recovery after an actual failure, never a Stop-button action.
+      // Stop owns cancellation when its AbortController is responsible.
       if (!finished && !signal.aborted && this.connected) {
         try { await this._write(control(0xfe)); await delay(50); } catch { /* Link may already be lost. */ }
       }
       this._uploading = false; this._replies = [];
-      if (!signal.aborted && this.connected) {
-        try { await this._friendly(signal); }
-        catch (error) {
-          // A cleanup timeout must not hide the useful file/GATT error.
-          if (!failure) throw error;
-          this._emit('notice', `REPL recovery failed: ${error.message}. Reconnect if the next command also fails.`);
-        }
-      }
+      if (!signal.aborted && this.connected) await this._friendly(signal);
     }
     progress({ sent: bytes.length, total: bytes.length });
   }
@@ -453,15 +421,17 @@ export class BleReplClient {
   stop() {
     if (this._stopping) return this._stopping;
     if (!this.connected) return Promise.resolve();
-    if (this.uploadActive) {
-      this._emit('notice', 'File transfer is active. Stop is available after it finishes.');
-      return Promise.resolve(false);
-    }
     this._discardTerminalInput();
+    const wasUpload = this._uploading;
     this._operation?.controller.abort(); // Invalidates queued old writes before scheduling Stop.
     this._state('stopping');
     this._stopping = (async () => {
       try {
+        if (wasUpload) {
+          this._uploading = true;
+          await this._write(control(0xfe)); // Close any partial target BEFORE Ctrl+C enters REPL.
+          await delay(60);
+        }
         this._uploading = false; this._replies = []; this._raw = null;
         await this._friendly();
       } finally {

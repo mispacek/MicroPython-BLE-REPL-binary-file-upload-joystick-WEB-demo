@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // UI wiring lives here; projects can import ble-client.js without any of this DOM.
-import { BleReplClient } from './ble-client.js';
+import { BleReplClient } from './ble-client.js?v=1.2.0';
 import { bindEditor } from './editor.js';
 import { createReplTerminal } from './terminal.js';
 const $ = id => document.getElementById(id);
@@ -30,6 +30,7 @@ function updateTerminal() {
     client.terminalReady ? (client.state === 'running' ? 'Program input · click to type' : 'Click here to type') : 'Input paused during transfer';
   for (const button of document.querySelectorAll('[data-repl]'))
     button.disabled = !client.connected || client.state === 'stopping' ||
+      client.uploadActive ||
       (button.dataset.repl !== '3' && client.state !== 'idle');
 }
 client.on('terminalReady', updateTerminal);
@@ -46,7 +47,7 @@ client.on('state', state => {
   $('connect').disabled = online || state === 'connecting';
   $('disconnect').disabled = !online;
   $('run').disabled = !idle; $('upload').disabled = !idle;
-  $('stop').disabled = !online || state === 'stopping'; updateTerminal();
+  $('stop').disabled = !online || state === 'stopping' || client.uploadActive; updateTerminal();
   for (const id of ['left-stick', 'right-stick']) $(id).setAttribute('aria-disabled', String(!online || !client.joy || state === 'uploading' || state === 'stopping'));
   if (!online) { $('device').textContent = 'No board selected'; $('mtu').textContent = 'MTU 23 · payload 20 B'; center(); }
 });
@@ -61,7 +62,9 @@ $('connect').addEventListener('click', async () => {
   } catch (error) { handle(error); }
 });
 $('disconnect').addEventListener('click', () => { center(); client.disconnect(); notice('Disconnected.'); });
-$('stop').addEventListener('click', () => { center(); client.stop().then(() => notice('Stopped. The REPL is ready.')).catch(handle); });
+$('stop').addEventListener('click', () => { center(); client.stop().then(stopped => {
+  if (stopped !== false) notice('Stopped. The REPL is ready.');
+}).catch(handle); });
 $('run').addEventListener('click', async () => {
   center();
   try {

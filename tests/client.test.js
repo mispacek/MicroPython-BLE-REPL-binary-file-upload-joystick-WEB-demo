@@ -57,6 +57,11 @@ class Peer {
         const start = p.splice(0, 8 + op);
         const path = new TextDecoder().decode(Uint8Array.from(start.slice(8)));
         const size = start[5] | start[6] << 8 | start[7] << 16;
+        if (this.options.headerFileErrorOnce && !this.fileErrorSent) {
+          this.fileErrorSent = true; this.phase = 'fault';
+          this.text('>>> BLE Error reason=file errno=20\n');
+          this.ack(false, 0); continue;
+        }
         if (!(this.path === path && this.next === 0 && this.size === size)) {
           this.path = path; this.size = size; this.next = 0; this.files.set(path, []);
           this.headerCount++;
@@ -143,10 +148,13 @@ test('Stop aborts running raw REPL code without disconnecting', async () => {
   assert.ok(peer.running); await client.stop(); await rejected;
   assert.equal(peer.running, false); assert.equal(client.connected, true); await client.command('print(42)'); client.disconnect();
 });
-test('Stop during a fragmented header closes upload before returning to REPL', async () => {
+test('Stop during a fragmented header cannot abort the upload', async () => {
   const { peer, client } = await setup(20, { slow:true });
-  const job = client.upload('/' + 'a'.repeat(45), data); const rejected = assert.rejects(job, { name:'AbortError' });
-  await sleep(1); await client.stop(); await rejected;
+  const job = client.upload('/' + 'a'.repeat(45), data);
+  await sleep(1); assert.equal(await client.stop(), false);
+  assert.equal(client._operation.controller.signal.aborted, false);
+  await job;
+  assert.deepEqual(Uint8Array.from(peer.files.get('/' + 'a'.repeat(45))), data);
   assert.equal(peer.pending.length, 0); assert.equal(peer.phase, 'repl');
   assert.equal(client._waiters.size, 0); assert.equal(client.state, 'idle'); client.disconnect();
 });
@@ -203,13 +211,85 @@ test('starting upload invalidates queued terminal keys and blocks input without 
   assert.deepEqual(peer.commands, ['print(42)']); client.disconnect();
 });
 
-test('terminal Ctrl+C cancels upload, then accepts the next command', async () => {
+test('terminal Ctrl+C preserves the complete upload, then accepts the next command', async () => {
   const { client, peer } = await setup(20, { slow:true });
   const job = client.upload('/cancel.bin', data);
-  const rejected = assert.rejects(job, { name:'AbortError' });
-  await sleep(1); await client.writeTerminal('\x03'); await rejected;
+  await sleep(1); assert.equal(await client.writeTerminal('\x03'), false); await job;
+  assert.deepEqual(Uint8Array.from(peer.files.get('/cancel.bin')), data);
   assert.equal(peer.phase, 'repl'); assert.equal(client.state, 'idle');
   await client.writeTerminal('print(42)\r'); assert.deepEqual(peer.commands, ['print(42)']); client.disconnect();
+});
+
+test('editor Run protects its upload, but Stop still interrupts execution', async () => {
+  const { client, peer } = await setup(20, { slow:true, busy:true });
+  const source = '# '.repeat(250) + '\nwhile True: pass';
+  const job = client.run(source); const rejected = assert.rejects(job, {name:'AbortError'});
+  await sleep(1);
+  assert.equal(client.uploadActive, true);
+  assert.equal(await client.stop(), false);
+  for (let i=0; i<200 && !peer.running; i++) await sleep(5);
+  assert.ok(peer.running);
+  assert.equal(new TextDecoder().decode(Uint8Array.from(peer.files.get('/ble_demo_run.py'))), source);
+  await client.stop(); await rejected;
+  assert.equal(client.connected, true); assert.equal(peer.running, false);
+  client.disconnect();
+});
+
+test('fragmented driver diagnostic preserves the complete errno before rejecting ACK wait', async () => {
+  const { client, peer } = await setup(244);
+  client._uploading = true;
+  peer.text('>>> BLE Error reason=file errno=2');
+  assert.equal(client._transferError, null);
+  peer.text('0\n'); peer.ack(false, 0);
+  await assert.rejects(client._reply(40), /^Error: BLE Error reason=file errno=20$/);
+  client.disconnect();
+});
+
+test('file error keeps the connection usable for the next binary upload', async () => {
+  const { client, peer } = await setup(20, {headerFileErrorOnce:true});
+  await assert.rejects(client.upload('/bad.bin', data), /BLE Error reason=file errno=20/);
+  assert.equal(client.connected, true); assert.equal(client.state, 'idle');
+  assert.equal(client._waiters.size, 0);
+  await client.upload('/recovered.bin', data);
+  assert.deepEqual(Uint8Array.from(peer.files.get('/recovered.bin')), data);
+  client.disconnect();
+});
+
+test('a cleanup timeout never replaces the original file error', async () => {
+  const {client, peer} = await setup(244, {headerFileErrorOnce:true});
+  const friendly = client._friendly.bind(client);
+  client._friendly = async () => { throw new Error('cleanup timed out'); };
+  await assert.rejects(client.upload('/bad.bin', data), /BLE Error reason=file errno=20/);
+  assert.equal(client.connected, true);
+  client._friendly = friendly;
+  await client.upload('/next.bin', data);
+  assert.deepEqual(Uint8Array.from(peer.files.get('/next.bin')), data);
+  client.disconnect();
+});
+
+test('a rejected GATT write does not poison the lane for recovery or the next upload', async () => {
+  const {client, peer} = await setup(244);
+  const write = peer.rx.writeValueWithResponse;
+  let failed = false;
+  peer.rx.writeValueWithResponse = async bytes => {
+    if (!failed) { failed = true; throw new Error('GATT operation failed'); }
+    return write(bytes);
+  };
+  await assert.rejects(client.upload('/bad.bin', data), /GATT operation failed/);
+  assert.equal(client.connected, true);
+  await client.upload('/after-gatt.bin', data);
+  assert.deepEqual(Uint8Array.from(peer.files.get('/after-gatt.bin')), data);
+  client.disconnect();
+});
+
+test('the GATT lane owns an immutable copy of queued packet bytes', async () => {
+  const {client, peer} = await setup(20);
+  const bytes = enc.encode('print(42)\r');
+  const job = client._write(bytes);
+  bytes.fill(0);
+  await job;
+  assert.deepEqual(peer.commands, ['print(42)']);
+  client.disconnect();
 });
 
 test('managed Run accepts stdin only during execution and rejects mode controls', async () => {

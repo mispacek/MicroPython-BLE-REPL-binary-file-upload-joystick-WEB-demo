@@ -209,13 +209,44 @@ class TransportTests(unittest.TestCase):
         self.c.rx(packet(1, b'def'))
         self.c.rx(control(253))
         self.assertEqual(self.c.resolve('/dupe.bin').read_bytes(), b'abcdef')
-        self.assertTrue(self.c.output().endswith(b'\x15\x02\x00\x06\x02\x00'))
+        self.assertTrue(self.c.output().endswith(b'\x06\x01\x00\x06\x02\x00'))
 
     def test_cr_fragment_resumes_repl_after_eof(self):
         self.start_file('/resume.bin', 3)
         self.c.rx(packet(0, b'abc'))
         self.c.stream(b'\r\x02print(42)\r', (1,))
         self.assertEqual(self.read_rx(), b'\r\x02print(42)\r')
+
+    def test_ide_run_command_directly_after_binary_upload(self):
+        for fragments in ((1,), (20,), (7, 3)):
+            with self.subTest(fragments=fragments):
+                self.reconnect()
+                self.start_file('/idecode', 3)
+                self.c.rx(packet(0, b'abc'))
+                # Production IDE calls sendCommand('run_code()') after final ACK;
+                # its successful binary-upload path sends no REPL control prefix.
+                command = b'run_code()\r\n'
+                self.c.stream(command, fragments)
+                self.assertEqual(self.read_rx(), command)
+                self.assertEqual(self.d._ph, 0)
+
+    def test_printable_last_sequence_retry_is_not_a_repl_command(self):
+        for prefix in (b'ru', b'pr', b'()'):
+            with self.subTest(prefix=prefix):
+                self.start_file('/ascii-sequence.bin', 3)
+                self.d._seq = prefix[0] | prefix[1] << 8
+                wire = packet(self.d._seq, b'abc')
+                self.c.rx(wire)
+                self.c.stream(wire, (1,))
+                self.assertEqual(self.read_rx(), b'')
+                self.assertEqual(self.d._ph, 4)
+                self.assertEqual(self.c.resolve('/ascii-sequence.bin').read_bytes(), b'abc')
+
+    def test_direct_command_after_empty_upload(self):
+        self.start_file('/empty-idecode', 0)
+        self.c.stream(b'run_code()\r\n', (1,))
+        self.assertEqual(self.read_rx(), b'run_code()\r\n')
+        self.assertEqual(self.d._ph, 0)
 
     def test_duplicate_sequence_13_is_not_repl_escape(self):
         self.start_file('/thirteen.bin', 3)
@@ -279,6 +310,74 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(self.c.interrupts, 1)
         self.assertIn(b'\x06\xfc\xff', self.c.output())
         self.assertIs(self.c.slot, self.d)
+
+    def test_protocol_stop_cannot_abort_active_upload(self):
+        self.start_file('/protected.bin', 6)
+        self.c.rx(packet(0, b'abc'))
+        interrupts = self.c.interrupts
+        self.c.rx(control(252))
+        self.assertEqual(self.d._ph, 2)
+        self.assertIsNotNone(self.d._f)
+        self.assertEqual(self.c.interrupts, interrupts)
+        self.c.rx(packet(1, b'def'))
+        self.assertEqual(self.c.resolve('/protected.bin').read_bytes(), b'abcdef')
+        self.assertEqual(self.d._ph, 4)
+
+    def test_eof_retry_repeats_success_without_rewriting_or_syncing(self):
+        self.start_file('/committed.bin', 6)
+        self.c.rx(packet(0, b'abc'))
+        self.c.rx(packet(1, b'def'))
+        calls = list(self.c.io_calls)
+        self.c.clear_output()
+        self.c.stream(packet(1, b'def'), (1,))
+        self.assertEqual(self.c.output(), b'\x06\x01\x00')
+        self.assertEqual(self.c.io_calls, calls)
+        self.assertEqual(self.d._seq, 2)
+
+    def test_stop_in_same_write_as_final_data_cannot_preempt_ack(self):
+        self.start_file('/final-stop.bin', 3)
+        interrupts = self.c.interrupts
+        self.c.clear_output()
+        self.c.rx(packet(0, b'abc') + control(252))
+        self.assertEqual(self.c.output(), b'\x06\x00\x00')
+        self.assertEqual(self.c.interrupts, interrupts)
+        self.assertEqual(self.d.stats()['stop_ignored'], 1)
+        self.assertEqual(self.c.resolve('/final-stop.bin').read_bytes(), b'abc')
+
+    def test_overflow_reports_error_quarantines_tail_and_recovers_on_same_link(self):
+        self.start_file('/failed.bin', 6)
+        self.c.rx(packet(0, b'abc'))
+        for _ in range(11):
+            self.c.rx(b'x' * 400, drain=False)
+        self.c.tick(2)
+        self.assertEqual(self.d._conn, 1)
+        self.assertEqual(self.d._ph, 5)
+        self.assertIn(b'BLE Error reason=ingress', self.c.output())
+        self.c.stream(b"print('must never run')\r\x03" + packet(1, b'def'), (1,))
+        self.assertEqual(self.read_rx(), b'')
+        self.assertEqual(self.c.resolve('/failed.bin').read_bytes(), b'abc')
+        self.start_file('/recovered.bin', 3)
+        self.c.rx(packet(0, b'xyz'))
+        self.assertEqual(self.c.resolve('/recovered.bin').read_bytes(), b'xyz')
+        self.assertEqual(self.d._conn, 1)
+
+    def test_file_error_reports_reason_without_disconnect(self):
+        self.start_file('/full.bin', 3)
+        self.c.write_error = errno.ENOSPC
+        self.c.rx(packet(0, b'abc'))
+        self.assertEqual(self.d._conn, 1)
+        self.assertIn(b'BLE Error reason=file errno=', self.c.output())
+
+    def test_quarantine_partial_magic_timeout_does_not_expose_repl_bytes(self):
+        self.d._bad('ingress')
+        self.c.tick()
+        self.c.stream(b'garbage\xfa\xce', (1,))
+        self.c.tick(51)
+        self.assertEqual(self.d._ph, 5)
+        self.assertEqual(self.d._r.any(), 0)
+        self.c.stream(control(254), (1,))
+        self.c.rx(b'print(42)\r')
+        self.assertEqual(self.read_rx(), b'print(42)\r')
 
     def test_file_error_uses_failed_sequence_and_status_not_success(self):
         for kind in ('write', 'short', 'close', 'sync'):
@@ -345,8 +444,7 @@ class TransportTests(unittest.TestCase):
     def test_attr_ingress_and_repl_overflow_are_faults(self):
         for kind in ('rx_attr', 'ingress', 'rx'):
             with self.subTest(kind=kind):
-                if self.d._conn is None:
-                    self.c.connect()
+                self.reconnect()
                 if kind == 'rx_attr':
                     self.c.rx(b'a' * 512, drain=False)
                 elif kind == 'ingress':
@@ -356,9 +454,11 @@ class TransportTests(unittest.TestCase):
                     for _ in range(6):
                         self.c.rx(b'a' * 400)
                 self.c.tick(2)
-                self.assertIsNone(self.d._conn)
+                self.assertEqual(self.d._conn, 1)
+                self.assertEqual(self.d._ph, 5)
                 self.assertEqual(self.d.stats()['fault'], kind)
                 self.assertEqual(self.read_rx(), b'')
+                self.assertIn(('BLE Error reason=' + kind).encode(), self.c.output())
 
     def test_priority_queue_overflow_is_fault(self):
         for _ in range(9):
@@ -366,7 +466,8 @@ class TransportTests(unittest.TestCase):
         self.assertTrue(self.d._fault)
         self.c.tick()
         self.assertEqual(self.d.stats()['fault'], 'protocol')
-        self.assertIsNone(self.d._conn)
+        self.assertEqual(self.d._conn, 1)
+        self.assertEqual(self.d._ph, 5)
 
     def test_scheduler_full_timer_fallback(self):
         self.c.queue_size = 0
@@ -661,7 +762,8 @@ class StartupMTUTests(unittest.TestCase):
         self.c.rx(b'x' * 512, drain=False)
         self.c.connect(1, None)
         self.c.tick(2)
-        self.assertIsNone(d._conn)
+        self.assertEqual(d._conn, 1)
+        self.assertEqual(d._ph, 5)
         self.assertEqual(d._r.any(), 0)
 
     def test_foreign_attribute_is_drained(self):

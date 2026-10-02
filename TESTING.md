@@ -1,27 +1,32 @@
 # Verification record
 
-Recorded **2026-10-02**. Evidence is split below so a protocol model, a browser
-page and a real radio/VM are never presented as the same test.
+Updated **2026-10-03**, release **1.2.0**. A protocol model, a browser page and a
+real radio/VM are separate kinds of evidence. The current demo client has local
+tests; the current driver also has the real ESP32-S3 evidence described below.
 
-## Static / local — passed
+## Static / local — passed for 1.2.0
 
-- **64 driver tests** against the MIT copy in `firmware/`: fixed buffers, soft timer,
-  native boundary markers, ownership/cleanup, early MTU events, retry, fragmented
-  and coalesced input, checksum/sequence errors, deadlines, file errors, joystick,
-  overflow and reconnect. The fake environment is not a MicroPython VM or radio.
-- **25 JavaScript tests** against `web/ble-client.js`: MTU-23/247 chunking, bytewise
-  fragmented UTF-8/capability/ACK notifications, binary identity, header retry,
-  lost window/final ACK, STATUS recovery, absolute ACK boundaries after NAK,
-  empty file, Run stdout/stderr, Stop during execution/fragmented header,
-  disconnect cleanup and rejected file-error completion. Includes highlighter
-  escaping and wire bounds. Interactive regressions verify UTF-8/control-byte
-  order, the 4096-byte input queue, cancellation before upload, blocked transfer
-  input, stdin during managed execution, mode-control guards, reconnect isolation
-  and Ctrl+C bypassing queued paste without switching the manual raw mode.
-- Python AST and JavaScript syntax, relative documentation/asset links, MIT marker,
-  40,000-byte source budget and recorded hardware hashes checked by `check-package.py`.
-- The firmware copy has the same parsed Python AST as the original new driver;
-  licensing comments differ. Production ESP IDE and the legacy reference were untouched.
+- **73 driver tests** against the MIT copy in `firmware/`: fixed buffers, deferred
+  processing, native interrupt boundaries, fragmented/coalesced input, MTU,
+  checksums, sequence numbers, deadlines, joystick, overflow and reconnect.
+  Regressions cover direct `run_code()` after EOF, duplicate final DATA without
+  another file write, Stop protection, fault quarantine and recovery.
+- **31 JavaScript tests** against the current protocol client and highlighter:
+  MTU-23/247 chunking, fragmented UTF-8/capabilities/ACKs, binary identity,
+  header/window/final-ACK recovery, empty files, editor Run/stdin/Stop, terminal
+  controls, bounded input, disconnect cleanup, upload protection, fragmented
+  `BLE Error reason=file errno=20`, subsequent upload on the same connection,
+  preservation of the original error and recovery of the GATT write queue.
+- **2 client/driver integration tests**, at MTU 23 and 247. The actual JavaScript
+  client exchanges bytes with the actual packaged Python driver through fake
+  GATT/CPython adapters. A 4097-byte upload completes despite Stop/Ctrl+C and a
+  dropped final ACK; a real filesystem ENOTDIR is reported, followed by a
+  successful upload and REPL command without reconnecting. The tiny prompt
+  stand-in is not a MicroPython VM, and these tests do not measure BLE radio behavior.
+- Python AST, JavaScript syntax, local documentation/asset links, MIT marker,
+  40,000-byte source budget and physical-report source hashes are checked by
+  `check-package.py`. The current firmware is byte-identical to the MIT driver
+  used for the recorded S3 checks. RX/TX/IN remain **2048/2048/4096** bytes.
 
 Run from this repository root (Python 3.10+ and Node 18+):
 
@@ -31,106 +36,92 @@ npm test
 python -B tests/check-package.py
 ```
 
-No `npm install` is required. `check-package.py` refuses a stale physical report
-if the client or driver no longer matches its recorded SHA-256.
+No `npm install` is required. `npm test` runs all **33 JavaScript tests**, including
+the Python peer tests; Python must also be on PATH. Package checks compare archived
+reports with their immutable source snapshots, the S3 record with the current
+driver, and any newly generated demo hardware report with the current client/driver.
+Old hashes have not been changed to make an untested revision appear tested.
 
-## Live browser / MCP — page checks passed; full device UI check remains open
+## Live browser / MCP — historical page checks; current device UI check remains open
 
-The actual page was served by `serve.py` at localhost and opened in the Codex
-in-app browser. Verified: load without JavaScript console errors, Python colors,
-example switching, editor input, four-space Tab insertion and HTML escaping.
-The initial narrow viewport rendered stacked panels.
+On **2026-10-03**, the current local page loaded `app.js?v=1.2.0` without console
+errors/warnings and switched to the driver-diagnostics editor example. Document
+height was again 1363px, terminal height 388.5px and document/viewport width 1265px
+without horizontal overflow. No board connection was opened for this check.
 
-The visual refresh on 2026-10-02 adds a light background, white surfaces and blue
-accents. Verified the default desktop layout and a 390px viewport without page
-overflow, example switching, Tab indentation and matching editor/highlight font
-metrics. Joystick pads/thumbs use only radial gradients: both borders are 0px and
-both crosshair pseudo-elements are absent. Updated screenshot: [demo.png](docs/demo.png).
-The later interactive terminal adds local xterm.js 6.0.0 and FitAddon 0.11.0,
-direct input and ANSI cursor rendering. A resize feedback loop was reproduced:
-the terminal reached more than 6000px in height while FitAddon repeatedly grew
-its flex/grid container. CSS now contains renderer sizing, and the observer only
-fits when host dimensions change. The physical reports below were rerun for the
-new protocol-client hash.
+On **2026-10-02**, the local demo page passed checks for its light theme, Python
+colors, editor input/example switching, four-space Tab indentation and HTML
+escaping. Joystick pads use radial gradients without borders or crosshairs.
+Screenshot: [demo.png](docs/demo.png).
 
-The isolated [terminal fixture](tests/terminal-browser.html) imports the same
-renderer without a BLE backend. Passed: fragmented ANSI, line replacement,
-carriage return, backspace and color; actual typed characters, Enter, four arrows,
-Home/End, Backspace, Tab and Ctrl+A/B/E reach its input callback without local echo.
-Synthetic Ctrl+C and paste events separately pass the actual handlers, including
-one interrupt byte and CRLF/LF-to-CR conversion with indentation preserved.
-The in-app automation provider did not deliver native Ctrl+C/Ctrl+V key events;
-those OS shortcuts still need a manual browser check. No board response is simulated.
+The interactive terminal's resize feedback loop was reproduced and fixed. The
+desktop document stayed at 1363px across repeated observations/reloads, with
+388.5px terminal height and 16 rows, without horizontal overflow. A 390px viewport
+passed before the terminal update; the subsequent viewport-resize attempt did
+not take effect, so that is not a current narrow-screen terminal result.
 
-The current desktop page remained at 1363px document height across repeated
-observations and reloads; terminal height was 388.5px with 16 rows. It has no
-horizontal page overflow and retains the light theme without dark viewport edges.
-The current attempt to set a 390px viewport left the browser at 1280px, so a new
-narrow-viewport result is not claimed for this terminal version.
+The isolated [terminal fixture](tests/terminal-browser.html) passed fragmented
+ANSI, carriage return/backspace/color and typed keys including arrows, Home/End,
+Tab and Ctrl+A/B/E without local echo. Synthetic Ctrl+C/paste handlers passed;
+native OS Ctrl+C/Ctrl+V were not delivered by the automation provider. The
+browser did not expose its Bluetooth chooser, so no browser GATT session was
+established in those demo UI checks; a Save `.py` download observation timed out.
 
-Web Bluetooth selection was attempted, but the in-app browser did not expose a
-Bluetooth device chooser in the accessible page/screenshot. No browser GATT session
-was established. The local Save `.py` download observation also timed out; no file
-download was claimed. Do not infer a browser/device result from the Node test below.
+The renderer and styling are unchanged in 1.2.0. The new upload protection and
+error-recovery UI still need a full current-demo run in supported Chrome/Edge:
+select the board, type directly, Run/Stop, load/save `.py`, upload a binary file,
+recover after a file error and exercise both pads. Touch and narrow phone layouts
+remain manual checks. There is no service worker; versioned module URLs invalidate
+the changed JavaScript on reload.
 
-Still perform in supported Chrome/Edge: select the board, type directly, Run/Stop,
-load/save a local `.py`, upload binary through the file input, and hold/release both
-pads using pointer and keyboard. Touch, narrow phone viewport and GitHub Pages
-deployment have not been tested. Reload after editing assets; there is no service worker.
+## Physical device / host — current driver passed with production ESP IDE
 
-## Physical device / Windows host — 18 groups passed
+On **2026-10-02**, the exact driver now in `firmware/ble_repl.py` was tested on a
+real **ESP32-S3 / MicroPython 1.29.0 (2026-08-24)** using production ESP IDE Web
+Bluetooth v2.1.13/v2.1.14. [Driver evidence](tests/driver-validation-s3.json)
+records the driver SHA-256 and clearly identifies that separate client.
 
-**Real ESP32-C3 on COM4**, MicroPython 1.29.0 dated 2026-08-24, Windows BLE via
-Bleak, with the **same `web/ble-client.js`** running in Node through a thin GATT
-adapter. Both actual negotiated **MTU 247 (244B payload)** and **MTU 23 (20B payload)**
-were verified. At MTU 23 the harness changes only the test stack preference before
-connection; the distributed driver default remains 247.
+- Uploads of 0, 1, 239, 240, 241, 961, 8192, 32768, 65536 and 262144 bytes matched
+  independent byte sizes/SHA-256 checks.
+- Ten Stop attempts during a 256 KiB upload did not cancel it.
+- A missing final ACK recovered without reconnecting.
+- A real `BLE Error reason=file errno=20` was followed by a successful upload on
+  the same connection.
+- Three File Manager listings each included all 40 test files; a 64 KiB download
+  matched SHA-256. Original startup/program files were preserved.
 
-Nine groups in each report:
+This validates the **driver**, not the newly updated demo JavaScript or its UI.
+The demo 1.2.0 physical harness has been updated to expect a completed upload
+after Stop, but has **not been rerun on hardware**. No current Android/iOS,
+Wi-Fi coexistence, RF-interference, overnight or power-loss result is claimed.
 
-1. CONFIG capability and real negotiated MTU.
-2. Interactive typing without Enter, cursor/backspace editing, Home/End, history,
-   Tab completion, multiline paste and manual raw/friendly transitions on the real VM.
-3. **4097-byte binary upload** into a new nested folder, with independent USB
-   SHA-256 readback: `3b34ef01bf0b26b74e23f75c8752791b406c4befbc271b68dd7f015fbd4b7891`.
-4. Empty file creation.
-5. Editor Run mechanism, UTF-8 stdout, real `ValueError` stderr, then a successful Run.
-6. Terminal stdin for `input()` during editor Run, with the reply `Ada`.
-7. Both signed joystick pairs `[-70, 80, 90, -100]`.
-8. Terminal Ctrl+C stopping a Python busy loop, then a successful next Run over the same connection.
-9. Stop during upload, followed by replacement of the partial file.
+## Historical demo 1.1.0 — 18 physical groups passed
 
-Reports: [MTU 247](tests/hardware-results.json) and [MTU 23](tests/hardware-results-mtu23.json).
-They include source/client hashes, firmware identity, durations and restored state.
-Timing for “Stop busy Python” includes the following Run; it is **not isolated Ctrl+C latency**.
-This conservative demo uses GATT writes with response where supported. The 4097-byte
-upload took about 1.6 s at MTU 247 and 31.4 s at MTU 23 on this host; this is not a
-general BLE throughput benchmark.
+The earlier demo client/driver were tested on **ESP32-C3 / MicroPython 1.29.0**
+through Node/Bleak on Windows, at actual negotiated MTUs **247 and 23**. The
+[MTU 247 report](tests/historical/v1.1.0/hardware-results.json) and
+[MTU 23 report](tests/historical/v1.1.0/hardware-results-mtu23.json) remain unchanged.
+Their exact [driver](tests/historical/v1.1.0/firmware/ble_repl.py) and
+[client](tests/historical/v1.1.0/web/ble-client.js) snapshots are archived only for
+hash verification; they are not loaded by the current demo.
 
-The first MTU-23 joystick fixture sent axes before the slower upload/REPL setup and
-then read them after 3 s. The getters correctly returned zero due to stale protection.
-The fixture was corrected to send fresh axes after the program announced readiness;
-the client and driver did not need a change for that observation.
+Nine groups per MTU covered CONFIG, interactive/raw/paste REPL, 4097-byte binary
+upload with USB SHA-256 readback, empty files, Run/stdout/stderr, `input()`, both
+joysticks, busy-loop interruption followed by another Run, and the then-current
+upload cancellation/replacement behavior. **That last historical behavior is
+superseded by upload protection in 1.2.0.** The 4097-byte upload took about 1.6 s
+at MTU 247 and 31.4 s at MTU 23 on that host, not a general throughput benchmark.
+Busy-loop timing includes the following Run, not isolated Ctrl+C latency.
 
-All test writes stayed inside the marked `/__ble_demo_test` namespace. The board
-now contains existing `boot.py`, `ble_repl.py` and `ble_demo_run.py`; the test used
-`--preserve-root`. After closing the test radio, removing only that namespace and
-soft-resetting, all three original file hashes matched their baseline. The original
-BLE advertisement `MPY-BLE-DEMO` in slot 0 was restored by the untouched boot file.
-Its current SHA-256, recorded before and after both test runs, is:
-
-```text
-c61da2f80e8ab7119a4e5ed895a9c28ed34b1d2cc4a9461e58cb08df3e098eef
-```
-
-No firmware flashing, startup editing, other ESP32 models, browser picker success,
-overnight endurance, RF interference or power-loss testing is claimed here.
+Writes stayed within the owned `/__ble_demo_test` namespace. Both reports record
+matching baseline/restored original file hashes and BLE startup state. They do
+not certify the present state of a board that may since have been changed.
 
 ## Repeat the opt-in physical test
 
 Use a dedicated fresh ESP32-C3 with MicroPython 1.29 and only `boot.py` at the root.
-The harness refuses any other root contents, so it cannot overwrite an existing project.
-Close other serial/BLE clients first. Install Python test dependencies explicitly:
+The harness refuses any other root contents, so it cannot overwrite an existing
+project. Close other serial/BLE clients first and install test dependencies:
 
 ```sh
 python -m pip install pyserial bleak
@@ -138,23 +129,22 @@ python -B tests/hardware.py --port COM4 --mtu 247
 python -B tests/hardware.py --port COM4 --mtu 23
 ```
 
-Node must be on PATH. These commands overwrite the corresponding result JSON,
-create/clean only the owned namespace, and verify original file hashes.
-For an already configured board, add `--preserve-root`. This mode accepts regular
-root files, hashes every one, refuses root directories/existing test namespace,
-and temporarily closes only an identified BLE REPL with no client connected.
-After reset it restores/checks the original advertising name and dupterm slot.
-Example for the recorded board: `python -B tests/hardware.py --port COM4 --mtu 247 --preserve-root`.
-Interrupted tests may need USB recovery; never delete a directory without checking
-its ownership marker and keeping cleanup inside this namespace.
+Node must be on PATH. These commands write new `tests/hardware-results*.json`
+for the current sources, create/clean only the owned namespace and verify
+original file hashes. Archived 1.1.0 reports are not overwritten. For an already
+configured board, add `--preserve-root`; this accepts regular root files, hashes
+them, refuses root directories/existing test namespace and temporarily closes
+only an identified BLE REPL with no client connected. Reset restores/checks the
+original advertisement and dupterm slot. Interrupted tests may need USB recovery;
+check the ownership marker before cleaning any test directory.
 
-For manual browser verification, a terminal can run:
+For manual browser verification:
 
 ```sh
 python -B tests/browser-session.py --port COM4
 ```
 
-After READY, connect the browser to `MPY-BLE-DEMO-UI` and change its Run destination
-to `/__ble_demo_test/ui.py`. Keep uploads inside `/__ble_demo_test/` too. Disconnect
-the browser and press Enter in that terminal to restore the clean board. This fixture
-does not validate the UI itself; it prepares a temporary driver without startup changes.
+After READY, connect the browser to `MPY-BLE-DEMO-UI` and set its Run destination
+to `/__ble_demo_test/ui.py`. Keep uploads in `/__ble_demo_test/` too. Disconnect
+the browser and press Enter in that terminal to restore the board. This fixture
+prepares a temporary driver without startup changes; it does not itself validate UI.

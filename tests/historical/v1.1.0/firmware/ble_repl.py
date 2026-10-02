@@ -100,7 +100,6 @@ class BLENUSRepl(io.IOBase):
         self._fc = 0
         self._last_file_error = self._close_error = 0
         self._drop = self._sf = self._ne = 0
-        self._si = 0
         self._reason = None
         self._reset(False)
 
@@ -289,26 +288,6 @@ class BLENUSRepl(io.IOBase):
         self._reason = reason
         self._ng = self._og = 1
 
-    def _notice(self, reason, code):
-        self._queue(('BLE Error reason=%s errno=%d\n' % (reason, code)).encode())
-
-    def _quarantine(self):
-        # Lost stream bytes must never become a shortened Python command.
-        # Keep GATT alive and accept only MAGIC-framed recovery/control headers.
-        self._ph = 5
-        self._fe = self._last_file_error = self._fault
-        self._fd = self._pd = None
-        self._ix = self._iz = self._bp = self._bn = self._kind = 0
-        self._sn = self._so = self._qh = self._qc = self._qo = 0
-        self._td = self._qd = self._back = None
-        self._ic = self._ip = self._is = 0
-        self._drain(self._r)
-        self._drain(self._t)
-        self._drain(self._in)
-        self._fc = self._f is not None
-        self._notice(self._reason, self._fault)
-        self._ack(False, self._seq)
-
     def _mtu_event(self, mtu):
         self._mtu = max(23, mtu)
         self._chunk = min(_MAX, self._mtu - 3)
@@ -436,8 +415,12 @@ class BLENUSRepl(io.IOBase):
         return True
 
     def _file_fail(self, code):
-        self._bad('file', code)
-        self._quarantine()
+        self._fe = self._last_file_error = code
+        self._ph = 3
+        self._fd = None
+        self._og = self._ng = 0
+        self._fc = self._f is not None
+        self._ack(False, self._seq)
 
     def _parents(self, path, ep):
         i = path.find('/', 1)
@@ -463,10 +446,6 @@ class BLENUSRepl(io.IOBase):
         raw = b[4]
         size = b[5] | (b[6] << 8) | (b[7] << 16)
         ep = self._ep
-        if raw == 252 and (self._ph in (1, 2, 5) or (self._ph == 4 and self._qc)):
-            # Stop is for user code, never for a pending upload/final ACK.
-            self._si = _inc(self._si)
-            return
         if raw >= 252:
             if size:
                 self._ack(False, self._seq)
@@ -481,7 +460,6 @@ class BLENUSRepl(io.IOBase):
                     return
                 if self._ep != ep:
                     return
-                self._fault = 0
                 self._ph = self._fe = 0
                 self._fd = self._pd = None
                 self._og = self._ng = 0
@@ -513,7 +491,6 @@ class BLENUSRepl(io.IOBase):
             return
         if self._ep != ep:
             return
-        self._fault = 0
         self._path, self._size, self._rem, self._sink = path, size, size, sink
         self._ph = 1
         self._seq = self._fe = 0
@@ -572,11 +549,6 @@ class BLENUSRepl(io.IOBase):
         b = self._b
         seq = b[0] | (b[1] << 8)
         n = b[2]
-        if (self._ph == 4 and seq == (self._seq - 1) & 65535 and n and
-                (sum(self._v[:n + 3]) & 255) == b[n + 3]):
-            # A lost final ACK retries DATA, not the filesystem commit.
-            self._ack(True, seq)
-            return
         if (self._ph != 2 or seq != self._seq or n == 0 or n > self._rem or
                 (sum(self._v[:n + 3]) & 255) != b[n + 3]):
             self._ack(False, self._seq)
@@ -611,7 +583,7 @@ class BLENUSRepl(io.IOBase):
     def _parse(self, limit):
         ep = self._ep
         used = 0
-        while used < limit and (not self._fault or self._ph == 5) and self._ep == ep and self._ph != 1:
+        while used < limit and not self._fault and self._ep == ep and self._ph != 1:
             if self._ix == self._iz:
                 self._iz = self._in.readinto(self._ib, min(_ATTR, limit - used))
                 self._ix = 0
@@ -620,17 +592,16 @@ class BLENUSRepl(io.IOBase):
             i, end = self._ix, self._iz
             if self._kind == 0:
                 c = self._ib[i]
-                if self._ph in (0, 5):
+                if self._ph == 0:
                     fa = self._ib.find(b'\xfa', i, end)
-                    cc = self._ib.find(b'\x03', i, end) if self._ph == 0 else -1
+                    cc = self._ib.find(b'\x03', i, end)
                     j = end
                     if fa >= 0:
                         j = fa
                     if cc >= 0 and cc < j:
                         j = cc
                     if j > i:
-                        if self._ph == 0:
-                            self._text(self._iv[i:j])
+                        self._text(self._iv[i:j])
                         used += j - i
                         self._ix = j
                         continue
@@ -646,10 +617,9 @@ class BLENUSRepl(io.IOBase):
                     used += 1
                     self._bn = 4
                 else:
-                    # Successful IDE uploads are followed directly by run_code().
-                    # Probe text/control prefixes, but preserve the last DATA retry:
-                    # its sequence bytes can also be printable ASCII or Ctrl+A/B/C/D.
-                    self._kind = 5 if self._ph in (3, 4) and (c in (1, 2, 3, 4, 13) or 32 <= c < 127) else 2
+                    # The unchanged client resumes REPL with CR + a control byte.
+                    # A duplicate DATA sequence can itself start with Ctrl+A/B/C/D.
+                    self._kind = 5 if self._ph in (3, 4) and c in (1, 2, 3, 4, 13) else 2
                     self._bp = 0
                     self._bn = 2 if self._kind == 5 else 4
                 self._pd = utime.ticks_add(utime.ticks_ms(), 1000)
@@ -657,8 +627,7 @@ class BLENUSRepl(io.IOBase):
             if self._kind == 1:
                 # Only the four-byte magic probe is bytewise; payloads are bulk copies.
                 if self._ib[i] != _MAGIC[self._bp]:
-                    if self._ph != 5:
-                        self._text(self._v[:self._bp])
+                    self._text(self._v[:self._bp])
                     self._kind = self._bp = 0
                     self._pd = None
                     continue
@@ -679,9 +648,7 @@ class BLENUSRepl(io.IOBase):
             if self._kind == 5:
                 seq = self._b[0] | (self._b[1] << 8)
                 a, b = self._b[0], self._b[1]
-                repl = ((a in (1, 2, 3, 4) and b != 0) or
-                        (a == 13 and (b in (1, 2, 3, 4, 10) or 32 <= b < 127)) or
-                        (32 <= a < 127 and (b in (9, 10, 13) or 32 <= b < 127)))
+                repl = (a != 13 and b != 0) or (a == 13 and (b in (1, 2, 3, 4, 10) or 32 <= b < 127))
                 if repl and seq != (self._seq - 1) & 65535:
                     self._ph = 0
                     if a == 3:
@@ -754,7 +721,7 @@ class BLENUSRepl(io.IOBase):
         budget = _BUDGET
         calls = 0
         ep = self._ep
-        while budget and calls < (_BUDGET + self._chunk - 1) // self._chunk and self._conn is not None and (not self._fault or self._qc):
+        while budget and calls < (_BUDGET + self._chunk - 1) // self._chunk and self._conn is not None and not self._fault:
             pri = self._qc != 0
             deadline = self._qd if pri else self._td
             if deadline is not None and utime.ticks_diff(now, deadline) >= 0:
@@ -826,8 +793,17 @@ class BLENUSRepl(io.IOBase):
             if self._conn is None:
                 return
             if self._fault:
-                if self._ph != 5:
-                    self._quarantine()
+                h, ep = self._conn, self._ep
+                try:
+                    self._ble.gap_disconnect(h)
+                except OSError as e:
+                    self._close_error = e.args[0]
+                    return
+                if self._ep == ep:
+                    self._conn = None
+                    self._reset(False)
+                    self._ad = 1
+                return
             if self._ip:
                 return
             ep = self._ep
@@ -845,9 +821,7 @@ class BLENUSRepl(io.IOBase):
                 self._file_fail(errno.ETIMEDOUT)
                 self._kind = self._bp = self._bn = 0
             if self._pd is not None and utime.ticks_diff(now, self._pd) >= 0:
-                if self._ph == 5:
-                    pass  # Discard an incomplete recovery probe, never expose it to REPL.
-                elif self._kind == 1:
+                if self._kind == 1:
                     self._text(self._v[:self._bp])
                 elif self._kind == 5 and self._bp == 1:
                     self._ph = 0
@@ -866,7 +840,7 @@ class BLENUSRepl(io.IOBase):
             if self._ep != ep:
                 return
             self._parse(1024)
-            if self._ep == ep:
+            if self._ep == ep and not self._fault:
                 self._send(now)
         finally:
             self._busy = 0
@@ -881,7 +855,6 @@ class BLENUSRepl(io.IOBase):
                 'rx_queued': self._r.any(), 'ingress_queued': self._in.any() + self._iz - self._ix,
                 'tx_queued': self._t.any() + self._sn - self._so,
                 'tx_dropped': self._drop, 'protocol_queued': self._qc,
-                'stop_ignored': self._si,
                 'schedule_full': self._sf, 'notify_errors': self._ne,
                 'phase': self._ph, 'target': self._path, 'sequence': self._seq,
                 'remaining': self._rem, 'file_error': self._fe,
