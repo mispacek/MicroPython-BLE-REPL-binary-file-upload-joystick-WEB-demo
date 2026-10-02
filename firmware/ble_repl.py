@@ -617,9 +617,10 @@ class BLENUSRepl(io.IOBase):
                     used += 1
                     self._bn = 4
                 else:
-                    # The unchanged client resumes REPL with CR + a control byte.
-                    # A duplicate DATA sequence can itself start with Ctrl+A/B/C/D.
-                    self._kind = 5 if self._ph in (3, 4) and c in (1, 2, 3, 4, 13) else 2
+                    # Successful IDE uploads are followed directly by run_code().
+                    # Probe text/control prefixes, but preserve the last DATA retry:
+                    # its sequence bytes can also be printable ASCII or Ctrl+A/B/C/D.
+                    self._kind = 5 if self._ph in (3, 4) and (c in (1, 2, 3, 4, 13) or 32 <= c < 127) else 2
                     self._bp = 0
                     self._bn = 2 if self._kind == 5 else 4
                 self._pd = utime.ticks_add(utime.ticks_ms(), 1000)
@@ -648,7 +649,9 @@ class BLENUSRepl(io.IOBase):
             if self._kind == 5:
                 seq = self._b[0] | (self._b[1] << 8)
                 a, b = self._b[0], self._b[1]
-                repl = (a != 13 and b != 0) or (a == 13 and (b in (1, 2, 3, 4, 10) or 32 <= b < 127))
+                repl = ((a in (1, 2, 3, 4) and b != 0) or
+                        (a == 13 and (b in (1, 2, 3, 4, 10) or 32 <= b < 127)) or
+                        (32 <= a < 127 and (b in (9, 10, 13) or 32 <= b < 127)))
                 if repl and seq != (self._seq - 1) & 65535:
                     self._ph = 0
                     if a == 3:
