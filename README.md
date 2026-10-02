@@ -6,7 +6,9 @@ board, send binary files, and control two joysticks over one BLE connection.
 
 [Česky / Czech](README.cs.md) · [Wire protocol](PROTOCOL.md) · [Verification](TESTING.md) · [MIT license](LICENSE)
 
-**[Open the live demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)** — hosted on GitHub Pages over HTTPS; no local server required.
+<img width="1345" height="859" alt="image" src="https://github.com/user-attachments/assets/25d20a2c-9507-42ed-b361-a37c3f3654ff" />
+
+**[Open the live demo](https://mispacek.github.io/MicroPython-BLE-REPL-binary-file-upload-joystick-WEB-demo/)**
 
 ## What is included
 
