@@ -1,0 +1,16 @@
+<!doctype html>
+<!-- MIT. Renderer/input fixture only: no BLE connection or simulated board echo. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Interactive terminal browser checks</title>
+<link rel="stylesheet" href="../web/vendor/xterm/css/xterm.css">
+<link rel="stylesheet" href="../web/style.css">
+<main style="padding:30px">
+  <h1>Terminal test fixture</h1>
+  <p>Renderer and keyboard checks only. No board is connected; typed input is recorded below without echo.</p>
+  <button id="checks">Check cursor rendering</button><button id="interrupt-check">Check interrupt handler</button><button id="paste-check">Check paste handler</button><button id="pause">Pause input</button><button id="resume">Resume input</button>
+  <div id="terminal"></div><pre id="result" role="status">Ready</pre>
+  <h2>Captured input (JSON)</h2><pre id="keys">[]</pre>
+  <details><summary>Keyboard event diagnostics</summary><pre id="events"></pre></details>
+</main>
+<script type="module" src="terminal-browser.js"></script>

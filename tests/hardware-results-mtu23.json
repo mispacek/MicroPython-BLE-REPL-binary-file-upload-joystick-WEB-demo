@@ -1,0 +1,120 @@
+{
+  "passed": true,
+  "board": "ESP32-C3",
+  "results": [
+    {
+      "name": "CONFIG capability and negotiated MTU",
+      "passed": true,
+      "ms": 1,
+      "detail": {
+        "mtu": 23,
+        "chunk": 20
+      }
+    },
+    {
+      "name": "interactive REPL editing / history / completion / paste / raw modes",
+      "passed": true,
+      "ms": 716,
+      "detail": {
+        "edit": "\b\b\u001b[K)\b2)\b)\r\n42\r\n>>> ",
+        "history": "print(42)\r\n42\r\n>>> ",
+        "completion": "sys.implementation\r\n(name='micropython', version=(1, 29, 0, ",
+        "paste": "\r\nPASTE 0\r\nPASTE 1\r\n>>> ",
+        "raw": "OKRAW-DEMO\r\n\u0004\u0004>"
+      }
+    },
+    {
+      "name": "binary upload and independent USB SHA-256 readback",
+      "passed": true,
+      "ms": 31403,
+      "detail": {
+        "bytes": 4097,
+        "sha256": "3b34ef01bf0b26b74e23f75c8752791b406c4befbc271b68dd7f015fbd4b7891"
+      }
+    },
+    {
+      "name": "empty file",
+      "passed": true,
+      "ms": 511
+    },
+    {
+      "name": "editor Run / stdout / Python exception / next Run",
+      "passed": true,
+      "ms": 5112,
+      "detail": {
+        "stdout": "Hello žluťoučký!\r\n",
+        "stderr": "Traceback (most recent call last):\r\n  File \"<stdin>\", line 6, in <module>\r\n  File \"/__ble_demo_test/run.py\", line 2, in <module>\r\nValueError: demo\r\n",
+        "next": "42\r\n"
+      }
+    },
+    {
+      "name": "interactive stdin input() during editor Run",
+      "passed": true,
+      "ms": 3178,
+      "detail": {
+        "stdout": "INPUT-READY\r\nName: Ada\r\nINPUT-ANSWER: Ada\r\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "both signed joystick pairs",
+      "passed": true,
+      "ms": 4681,
+      "detail": "JOY-READY\r\n-70 80 90 -100"
+    },
+    {
+      "name": "Stop busy Python / BLE remains usable",
+      "passed": true,
+      "ms": 5340,
+      "detail": {
+        "stopAndNextRunMs": 2822
+      }
+    },
+    {
+      "name": "Stop upload / partial file / successful replacement",
+      "passed": true,
+      "ms": 1183
+    }
+  ],
+  "test_mtu": 23,
+  "recorded_utc": "2026-10-02T12:00:06.256038+00:00",
+  "host": "win32",
+  "identity": "(sysname='esp32', nodename='esp32', release='1.29.0', version='v1.29.0 on 2026-08-24', machine='ESP32C3 module with ESP32-C3')\r\n3.4.0; MicroPython v1.29.0 on 2026-08-24",
+  "baseline": {
+    "root": [
+      "ble_demo_run.py",
+      "ble_repl.py",
+      "boot.py"
+    ],
+    "file_sha256": {
+      "ble_demo_run.py": "32421e4faaa9f1a0f7acbec22caaf304f2d08b0afd4606b246a7913f1b997f46",
+      "ble_repl.py": "59d4a2b797f16365b0c6434989b3d77ca95279aacf6c600f4b2f2da4e732fb61",
+      "boot.py": "c61da2f80e8ab7119a4e5ed895a9c28ed34b1d2cc4a9461e58cb08df3e098eef"
+    },
+    "ble_active": true,
+    "radio_settings": {
+      "name": "MPY-BLE-DEMO",
+      "slot": 0
+    }
+  },
+  "restored": {
+    "root": [
+      "ble_demo_run.py",
+      "ble_repl.py",
+      "boot.py"
+    ],
+    "file_sha256": {
+      "ble_demo_run.py": "32421e4faaa9f1a0f7acbec22caaf304f2d08b0afd4606b246a7913f1b997f46",
+      "ble_repl.py": "59d4a2b797f16365b0c6434989b3d77ca95279aacf6c600f4b2f2da4e732fb61",
+      "boot.py": "c61da2f80e8ab7119a4e5ed895a9c28ed34b1d2cc4a9461e58cb08df3e098eef"
+    },
+    "boot_sha256": "c61da2f80e8ab7119a4e5ed895a9c28ed34b1d2cc4a9461e58cb08df3e098eef",
+    "ble_active": true,
+    "radio_settings": {
+      "name": "MPY-BLE-DEMO",
+      "slot": 0
+    }
+  },
+  "source_sha256": "5bc8aa43fef8fbc19ad93794fc3726f2db7f9c8a00fdf6e132683a172e195c3c",
+  "client_sha256": "86f42371343a5b11ffcafa9b4e949cbdcb478373885277a70a9817fa95b738ed"
+}

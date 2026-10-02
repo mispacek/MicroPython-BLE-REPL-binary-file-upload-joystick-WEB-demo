@@ -1,0 +1,269 @@
+/* SPDX-License-Identifier: MIT
+ * Light paper, white surfaces and a single blue accent.
+ * System fonts keep this demo free of CDN dependencies.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f5f8fb;
+  --panel: #fff;
+  --border: #e2e9ef;
+  --muted: #687d8f;
+  --text: #172d3d;
+  --accent: #287cc4;
+  --accent-hover: #1e68a7;
+  --accent-soft: #edf5fc;
+  --danger: #b34c4c;
+  --mono: ui-monospace, Consolas, "Liberation Mono", monospace;
+  --shadow: 0 5px 24px rgb(35 69 94 / 4%);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: linear-gradient(180deg, #f0f6fb 0, var(--bg) 440px);
+  color: var(--text);
+  font: 14px/1.55 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; }
+button {
+  min-height: 36px;
+  border: 1px solid #d8e2eb;
+  border-radius: 8px;
+  padding: 7px 14px;
+  color: #345269;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+button:hover:enabled { background: #f4f8fc; border-color: #a7bfd2; }
+button:active:enabled { background: #eaf2fa; }
+button:disabled { color: #8495a4; background: #f7f9fb; border-color: #e6ecf1; cursor: default; }
+.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.primary:hover:enabled { background: var(--accent-hover); border-color: var(--accent-hover); }
+.primary:disabled { background: #edf3f8; color: #738a9b; border-color: #e3ebf1; }
+.danger { color: var(--danger); border-color: #e7cccc; background: #fff; }
+.danger:hover:enabled { background: #fdf3f3; border-color: #c98c8c; }
+input, select {
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid #dce5ec;
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: var(--text);
+  background: #fff;
+}
+input::placeholder { color: #8394a2; opacity: 1; }
+input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+a { color: #5b7487; text-decoration: none; }
+a:hover { color: var(--accent); }
+.site-header, .masthead, main, footer {
+  max-width: 1320px;
+  margin: auto;
+  padding-left: 36px;
+  padding-right: 36px;
+}
+.site-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; height: 80px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 17px; letter-spacing: -.3px; }
+.brand:hover { color: var(--text); }
+.brand-mark { width: 34px; height: 34px; color: var(--accent); }
+.brand-product { margin-left: 5px; font-weight: 400; font-size: 13px; color: var(--muted); letter-spacing: .1px; }
+.site-header nav { display: flex; gap: 28px; font-size: 13px; }
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 36px; padding-top: 26px; padding-bottom: 30px; }
+.eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; }
+h1 { margin: 6px 0 12px; font-size: 54px; font-weight: 650; line-height: 1.05; letter-spacing: -2px; }
+.masthead p { margin: 0; font-size: 16px; line-height: 1.6; color: #6a7e8f; }
+.connection {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 328px;
+  padding: 18px 21px;
+  border: 1px solid #dfe8f0;
+  border-radius: 13px;
+  background: rgb(255 255 255 / 85%);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--muted);
+}
+.connection-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 7px; }
+.connection-heading > span:first-child { color: var(--text); font-size: 13px; font-weight: 600; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #718495; white-space: nowrap; }
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #a4b1bc; }
+.status.online { color: #357e68; }
+.status.online::before { background: #47a58a; }
+#device { color: #526c80; font-size: 13px; overflow-wrap: anywhere; }
+#mtu { font: 11px/1.7 var(--mono); color: #7d8fa0; }
+.connection .actions { margin-top: 9px; flex-wrap: nowrap; }
+.connection .actions button { flex: 1; font-size: 12px; }
+.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.notice {
+  margin: 0 0 20px;
+  padding: 11px 15px;
+  border: 1px solid #dce8f2;
+  border-radius: 9px;
+  background: #ecf4fa;
+  color: #59788f;
+  font-size: 12px;
+}
+.notice.error { color: #9e4545; background: #fff5f4; border-color: #ecd1ce; }
+.workspace, .utilities { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr); gap: 22px; }
+.utilities { margin-top: 22px; }
+.panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 17px 20px; border-bottom: 1px solid #e9eef3; }
+.panel-head .eyebrow { color: #8495a2; font-size: 11px; font-weight: 400; }
+h2 { margin: 2px 0 0; font-size: 18px; font-weight: 650; line-height: 1.4; letter-spacing: -.35px; }
+.panel-head button { font-size: 12px; }
+.tag { color: #8093a2; font: 10px/1.5 var(--mono); white-space: nowrap; }
+.editor-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid #e9eef3; background: #fbfcfe; font-size: 11px; }
+.editor-toolbar label { color: var(--muted); margin-right: 3px; }
+.editor-toolbar select { flex: 1; max-width: 225px; }
+.editor-toolbar select, .editor-toolbar button { min-height: 30px; padding: 4px 9px; font-size: 11px; }
+/* The textarea and highlight layer MUST share every font/spacing metric. */
+.code-editor { position: relative; height: 310px; background: #fafcfe; }
+.code-editor pre, .code-editor textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 20px;
+  font: 13px/1.7 var(--mono);
+  letter-spacing: 0;
+  tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+  overflow-wrap: normal;
+}
+.code-editor pre { pointer-events: none; color: #30465b; }
+.code-editor textarea { resize: none; background: transparent; color: transparent; caret-color: var(--accent); -webkit-text-fill-color: transparent; }
+.code-editor textarea:focus { outline-offset: -2px; }
+.code-editor textarea::selection { background: #a9cee966; }
+.tok-keyword { color: #7a4da1; }
+.tok-string { color: #3b785d; }
+.tok-comment { color: #738598; font-style: italic; }
+.tok-number { color: #9b6924; }
+.tok-builtin { color: #2775ac; }
+.panel-foot { display: flex; justify-content: space-between; gap: 10px; padding: 9px 17px; border-top: 1px solid #e9eef3; color: #8b9aa7; font-size: 10px; }
+.run-target { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 11px 17px; border-top: 1px solid #e9eef3; font-size: 11px; }
+.run-target label { color: #657e91; }
+.run-target input { flex: 1; min-width: 150px; min-height: 31px; font: 11px var(--mono); background: #fbfdff; }
+.run-target small { flex-basis: 100%; color: #8a9ba8; font-size: 10px; }
+.terminal-panel { display: flex; flex-direction: column; }
+/* xterm's rows must not contribute to the flex item's intrinsic size. Otherwise
+   FitAddon -> more rows -> a taller grid row -> FitAddon creates a resize loop. */
+#terminal { position: relative; flex: 1 0 340px; min-width: 0; min-height: 0; height: 380px; overflow: hidden; contain: size layout; background: #f8fbfe; }
+/* FitAddon subtracts padding from .xterm itself, not from its parent. */
+#terminal .xterm { position: absolute; inset: 0; padding: 18px; }
+#terminal .xterm-viewport { inset: 18px; background-color: #f8fbfe !important; }
+#terminal .xterm-helper-textarea { padding: 0; border: 0; min-height: 0; outline: none; }
+.terminal-controls { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 17px; border-top: 1px solid #e9eef3; }
+.terminal-controls button { min-height: 29px; padding: 5px 8px; font-size: 10px; }
+.terminal-controls kbd { margin-left: 5px; color: #8a9ba8; font: 9px var(--mono); }
+/* Keep native file-picker behavior; only its chooser button gets visual styling. */
+.upload-panel > label, .upload-panel > input, .upload-panel > .hint, .upload-panel > .actions, .upload-panel > progress { margin-left: 20px; margin-right: 20px; }
+.upload-panel > label { display: block; margin-top: 15px; color: #667e91; font-size: 11px; }
+.upload-panel > input { width: calc(100% - 40px); margin-top: 5px; min-height: 34px; font: 12px var(--mono); }
+.file-label input { display: block; width: 100%; margin-top: 6px; padding: 5px; font-size: 11px; color: #73889a; background: #fafcfe; }
+input[type=file]::file-selector-button { margin-right: 10px; padding: 5px 10px; border: 0; border-radius: 5px; background: #eaf2f9; color: #3e7198; font: inherit; font-weight: 600; cursor: pointer; }
+.hint { margin: 12px 20px; color: #8495a2; font-size: 11px; line-height: 1.65; }
+.upload-panel > .actions button { min-height: 33px; font-size: 12px; }
+#progress-label { color: #7d90a0; font-size: 11px; }
+progress { display: block; width: calc(100% - 40px); height: 4px; margin-top: 15px; margin-bottom: 19px; border: 0; border-radius: 3px; background: #edf2f6; accent-color: var(--accent); overflow: hidden; }
+progress::-webkit-progress-bar { background: #edf2f6; }
+progress::-webkit-progress-value { background: #3b88c9; border-radius: 3px; }
+progress::-moz-progress-bar { background: #3b88c9; border-radius: 3px; }
+.sticks { display: flex; justify-content: space-evenly; gap: 20px; padding: 20px 12px 0; }
+.sticks > div { text-align: center; font-size: 9px; color: #7d91a1; letter-spacing: .5px; }
+.sticks output { display: block; margin-top: 5px; color: #4d6a80; font: 11px var(--mono); letter-spacing: 0; }
+/* Pads and thumbs have no crosshair, border, outline or ring: gradients only.
+ * Keep the 42px thumb aligned with the coordinate calculations in app.js. */
+.stick {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  margin-bottom: 11px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: radial-gradient(circle at 43% 34%, #eef7fd 0, #dcecf8 45%, #c5deef 100%);
+  touch-action: none;
+  cursor: grab;
+}
+.stick i {
+  position: absolute;
+  left: calc(50% - 21px);
+  top: calc(50% - 21px);
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 27%, #83bce4 0, #539ace 48%, #3378af 100%);
+  pointer-events: none;
+}
+/* Keyboard focus changes the pad gradient rather than adding a line. */
+.stick:focus-visible { background: radial-gradient(circle at 43% 34%, #e8f5ff 0, #c5e1f7 45%, #9dc9e9 100%); }
+.stick[aria-disabled=true] { opacity: .6; cursor: default; }
+.joystick-panel > .hint { margin-top: 16px; text-align: center; }
+footer { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding-top: 25px; padding-bottom: 30px; font-size: 10px; color: #8397a6; }
+footer > span:first-child { margin-right: auto; }
+.footer-note { color: #93a4b0; }
+[hidden] { display: none !important; }
+@media (max-width: 1000px) {
+  .site-header, .masthead, main, footer { padding-left: 24px; padding-right: 24px; }
+  .workspace, .utilities { gap: 16px; }
+  .panel-head { padding-left: 16px; padding-right: 16px; }
+  .editor-toolbar { padding-left: 12px; padding-right: 12px; gap: 6px; }
+  .editor-toolbar label { display: none; }
+  .editor-toolbar select { max-width: none; }
+}
+@media (max-width: 780px) {
+  .workspace, .utilities { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .masthead { padding-top: 16px; gap: 24px; }
+  h1 { font-size: 46px; }
+  .masthead p { font-size: 14px; }
+  .connection { width: 290px; padding: 16px; }
+  #terminal { flex: none; min-height: 260px; height: 300px; }
+  .code-editor { height: 300px; }
+  .utilities { margin-top: 18px; }
+}
+@media (max-width: 560px) {
+  .site-header, .masthead, main, footer { padding-left: 18px; padding-right: 18px; }
+  .site-header { height: 64px; gap: 12px; }
+  .brand { font-size: 15px; gap: 6px; }
+  .brand-mark { width: 28px; height: 28px; }
+  .brand-product { font-size: 10px; margin-left: 2px; }
+  .site-header nav { font-size: 11px; gap: 12px; }
+  .site-header nav a:last-child { display: none; }
+  .masthead { align-items: stretch; flex-direction: column; gap: 21px; padding-top: 22px; padding-bottom: 22px; }
+  h1 { font-size: 44px; margin-bottom: 10px; }
+  .connection { width: 100%; padding: 16px 18px; }
+  .panel-head { gap: 8px; padding: 15px; }
+  .panel-head button { padding: 6px 10px; }
+  .panel-head .actions { gap: 6px; }
+  .editor-toolbar { padding: 10px 12px; gap: 7px; }
+  .editor-toolbar select { flex: 1; min-width: 120px; }
+  .code-editor pre, .code-editor textarea { padding: 16px; font-size: 12px; }
+  .panel-foot { flex-wrap: wrap; font-size: 9px; padding-left: 14px; padding-right: 14px; }
+  .run-target { padding-left: 14px; padding-right: 14px; }
+  .tag { display: none; }
+  .sticks { gap: 18px; }
+  .stick { width: 120px; height: 120px; }
+  footer { gap: 10px; }
+  .footer-note { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }

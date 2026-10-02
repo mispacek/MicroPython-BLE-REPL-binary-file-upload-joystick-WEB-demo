@@ -1,0 +1,9 @@
+# Keep web/documentation files consistent across Windows and Unix checkouts.
+* text=auto eol=lf
+# Preserve the exact driver/client bytes whose hashes are in hardware reports.
+firmware/*.py -text
+web/ble-client.js -text
+# Official vendor distributions stay byte-identical to the pinned npm archives.
+web/vendor/xterm/** -text
+web/vendor/addon-fit/** -text
+*.png -text

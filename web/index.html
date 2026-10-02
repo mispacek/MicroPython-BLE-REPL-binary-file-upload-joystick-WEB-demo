@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f8fb">
+  <title>BLE REPL · MicroPython playground</title>
+  <link rel="stylesheet" href="vendor/xterm/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="site-header">
+    <a class="brand" href="./" aria-label="ESP IDE BLE REPL home">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 5v22l8-7-16-8M16 5l8 7-16 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>ESP IDE <span class="brand-product">/ BLE REPL</span></span>
+    </a>
+    <nav aria-label="Project resources"><a href="../README.md">Documentation</a><a href="../PROTOCOL.md">Protocol</a></nav>
+  </div>
+  <header class="masthead">
+    <div class="intro"><span class="eyebrow">MicroPython development</span><h1>BLE REPL</h1>
+      <p>Write, run and explore.<br>A direct Bluetooth connection to your board.</p></div>
+    <div class="connection"><div class="connection-heading"><span>Device connection</span><span id="status" class="status" role="status">Disconnected</span></div>
+      <span id="device">No board selected</span><span id="mtu">MTU 23 · payload 20 B</span>
+      <div class="actions"><button id="connect" class="primary">Connect board</button>
+        <button id="disconnect" disabled>Disconnect</button></div></div>
+  </header>
+  <main>
+    <div id="notice" class="notice" role="status">Serve this folder on localhost or HTTPS, then connect a board running ble_repl.py.</div>
+    <section class="workspace">
+      <article class="panel editor-panel">
+        <div class="panel-head"><div><span class="eyebrow">Write & run</span><h2>Python editor</h2></div>
+          <div class="actions"><button id="run" class="primary" disabled>▶ Run</button><button id="stop" class="danger" disabled>■ Stop</button></div></div>
+        <div class="editor-toolbar"><label for="example">Example</label><select id="example" aria-label="Example">
+          <option value="hello">Hello, MicroPython</option><option value="joystick">Read both joysticks</option>
+          <option value="diagnostics">Driver diagnostics</option><option value="loop">Interrupt a loop</option>
+        </select><button id="load">Load .py</button><input id="load-file" type="file" accept=".py,text/plain" hidden>
+          <button id="save">Save .py</button></div>
+        <!-- The textarea owns input, selection, accessibility, and IME. A matching
+             inert <pre> underneath adds syntax colors without an editor dependency. -->
+        <div class="code-editor"><pre id="highlight" aria-hidden="true"></pre>
+          <textarea id="code" aria-label="Python source code" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea></div>
+        <div class="panel-foot"><span id="editor-count">0 lines</span><span>Tab indents · Ctrl/⌘ + Enter runs</span></div>
+        <div class="run-target"><label for="run-path">Run saves code to</label><input id="run-path" value="/ble_demo_run.py" spellcheck="false">
+          <small>This file is overwritten each time you press Run.</small></div>
+      </article>
+      <article class="panel terminal-panel">
+        <div class="panel-head"><div><span class="eyebrow">Output & commands</span><h2>REPL terminal</h2></div><button id="clear">Clear</button></div>
+        <!-- xterm renders remote ANSI cursor sequences and captures keyboard/IME input. -->
+        <div id="terminal" role="region" aria-label="Interactive MicroPython terminal"></div>
+        <div class="terminal-controls" aria-label="REPL controls">
+          <button data-repl="1" title="Ctrl+A: enter raw REPL" disabled>Raw <kbd>Ctrl A</kbd></button>
+          <button data-repl="2" title="Ctrl+B: return to friendly REPL" disabled>REPL <kbd>Ctrl B</kbd></button>
+          <button data-repl="5" title="Ctrl+E: enter paste mode before pasting multiline Python" disabled>Paste <kbd>Ctrl E</kbd></button>
+          <button data-repl="4" title="Ctrl+D: execute paste/raw input; soft reset in friendly REPL" disabled>End <kbd>Ctrl D</kbd></button>
+          <button data-repl="3" title="Ctrl+C: interrupt Python" disabled>Interrupt <kbd>Ctrl C</kbd></button>
+        </div>
+        <div class="panel-foot"><span id="terminal-state">Connect to type here</span><span>↑ ↓ history · Tab completes</span></div>
+      </article>
+    </section>
+    <section class="utilities">
+      <article class="panel upload-panel">
+        <div class="panel-head"><div><span class="eyebrow">Files</span><h2>Binary file upload</h2></div><span class="tag">.py · .mpy · any bytes</span></div>
+        <label class="file-label" for="upload-file">Choose a file<input id="upload-file" type="file"></label>
+        <label for="upload-path">Destination on board</label><input id="upload-path" value="/data.bin" spellcheck="false">
+        <p class="hint">Creates missing folders. Overwrites the destination. Stop may leave a partial file.</p>
+        <div class="actions"><button id="upload" disabled>Upload file</button><span id="progress-label" role="status">Ready</span></div>
+        <progress id="progress" value="0" max="100" aria-label="File upload progress"></progress>
+      </article>
+      <article class="panel joystick-panel">
+        <div class="panel-head"><div><span class="eyebrow">Input</span><h2>Dual joystick</h2></div><span class="tag">−100 … +100</span></div>
+        <div class="sticks"><div><div class="stick" id="left-stick" role="group" aria-disabled="true" aria-label="Left joystick, drag or use arrow keys" tabindex="0"><i></i></div>
+          <span>LEFT · selector 0</span><output id="left-axes">X 0 · Y 0</output></div>
+          <div><div class="stick" id="right-stick" role="group" aria-disabled="true" aria-label="Right joystick, drag or use arrow keys" tabindex="0"><i></i></div>
+          <span>RIGHT · selector 10</span><output id="right-axes">X 0 · Y 0</output></div></div>
+        <p class="hint">Drag a pad or focus it and hold arrow keys. Release to center. Up is positive Y.</p>
+      </article>
+    </section>
+  </main>
+  <footer><span>MicroPython 1.29 · ESP32 / NimBLE</span><span class="footer-note">Open source. Built for your projects.</span><a href="../LICENSE">MIT license</a></footer>
+</body>
+</html>
